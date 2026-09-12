@@ -78,8 +78,8 @@ export async function saveGameSessionToSupabase(params: {
   maxStreak: number;
   accuracy: number;
   mode: 'challenge' | 'zen';
-}): Promise<boolean> {
-  if (!supabase) return false;
+}): Promise<string | null> {
+  if (!supabase) return null;
 
   try {
     // 1. Buscar o crear el jugador en la tabla players
@@ -88,13 +88,12 @@ export async function saveGameSessionToSupabase(params: {
 
     const { data: existingPlayer } = await supabase
       .from('players')
-      .select('id, highest_score, highest_level, max_streak, total_games_played')
+      .select('id, highest_score, highest_level, max_streak, total_games_played, total_correct_answers')
       .eq('username', cleanName)
       .maybeSingle();
 
     if (existingPlayer) {
       playerId = existingPlayer.id;
-      // Actualizar récords personales si superó su mejor marca
       await supabase
         .from('players')
         .update({
@@ -124,25 +123,61 @@ export async function saveGameSessionToSupabase(params: {
     }
 
     // 2. Registrar la sesión de juego en game_sessions
-    await supabase.from('game_sessions').insert({
-      player_id: playerId,
-      game_mode: params.mode,
-      final_score: params.score,
-      final_level: params.level,
-      max_streak: params.maxStreak,
-      accuracy_percentage: params.accuracy,
-      ended_at: new Date().toISOString(),
-    });
+    const { data: session } = await supabase
+      .from('game_sessions')
+      .insert({
+        player_id: playerId,
+        game_mode: params.mode,
+        final_score: params.score,
+        final_level: params.level,
+        max_streak: params.maxStreak,
+        accuracy_percentage: params.accuracy,
+        ended_at: new Date().toISOString(),
+      })
+      .select('id')
+      .single();
 
-    return true;
+    return session?.id || null;
   } catch (err) {
     console.error('Error al guardar partida en Supabase:', err);
-    return false;
+    return null;
   }
 }
 
 // ==========================================================
-// 2. SERVICIO DE DATOS CURIOSOS (FACTS)
+// 2. REGISTRO DE RESPUESTAS INDIVIDUALES POR RONDA
+// ==========================================================
+
+export async function recordRoundAnswerToSupabase(params: {
+  sessionId?: string | null;
+  level: number;
+  selectedFactText: string;
+  isCorrect: boolean;
+  pointsAwarded: number;
+  streakMultiplier: number;
+  responseTimeSeconds: number;
+}): Promise<void> {
+  if (!supabase) return;
+
+  try {
+    // Si tenemos id de sesión y el ID del fact existe en DB, guardamos el detalle
+    if (params.sessionId) {
+      await supabase.from('round_answers').insert({
+        session_id: params.sessionId,
+        level: params.level,
+        is_correct: params.isCorrect,
+        points_awarded: params.pointsAwarded,
+        streak_multiplier: params.streakMultiplier,
+        response_time_seconds: params.responseTimeSeconds,
+      });
+    }
+  } catch {
+    // Silencioso para no degradar la experiencia de juego
+  }
+}
+
+// ==========================================================
+// 3. SERVICIO DE DATOS CURIOSOS (FACTS)
 // ==========================================================
 
 export async function fetchFactsFromSupabase(): Promise<Fact[] | null> {
@@ -177,13 +212,12 @@ export async function seedFactsToSupabaseIfEmpty(): Promise<boolean> {
   if (!supabase) return false;
 
   try {
-    // Comprobar si ya existen datos en la tabla facts
     const { count, error } = await supabase
       .from('facts')
       .select('*', { count: 'exact', head: true });
 
     if (error || (count && count > 0)) {
-      return false; // Ya tiene datos
+      return false; // Ya tiene datos cargados
     }
 
     // Extraer todos los datos locales
@@ -193,7 +227,6 @@ export async function seedFactsToSupabaseIfEmpty(): Promise<boolean> {
       ...INFINITE_POOL.convincingLies.map((f) => ({ ...f, isLie: true as const })),
     ];
 
-    // Eliminar duplicados por texto
     const uniqueMap = new Map<string, Fact>();
     allLocalFacts.forEach((f) => uniqueMap.set(f.text, f));
     const uniqueFacts = Array.from(uniqueMap.values());
@@ -213,6 +246,7 @@ export async function seedFactsToSupabaseIfEmpty(): Promise<boolean> {
       return false;
     }
 
+    console.log(`Se insertaron ${rowsToInsert.length} datos curiosos en Supabase automáticamente.`);
     return true;
   } catch (err) {
     console.error('Error al sincronizar datos con Supabase:', err);

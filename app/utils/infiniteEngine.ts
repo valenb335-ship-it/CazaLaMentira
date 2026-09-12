@@ -48,8 +48,19 @@ export function resetSeenFacts(): void {
   }
 }
 
+let remoteFactsCache: Fact[] | null = null;
+
+export function setRemoteFacts(facts: Fact[] | null): void {
+  remoteFactsCache = facts;
+}
+
 // Obtener todos los hechos reales del catálogo completo
 function getAllTrueFacts(): Fact[] {
+  if (remoteFactsCache && remoteFactsCache.length > 0) {
+    const remoteTrue = remoteFactsCache.filter((f) => !f.isLie);
+    if (remoteTrue.length >= 2) return remoteTrue;
+  }
+
   const map = new Map<string, Fact>();
   INFINITE_POOL.trueFacts.forEach((f) => map.set(f.id, { ...f, isLie: false as const }));
   CURATED_ROUNDS.forEach((r) => {
@@ -60,6 +71,11 @@ function getAllTrueFacts(): Fact[] {
 
 // Obtener todas las mentiras del catálogo completo
 function getAllLies(): Fact[] {
+  if (remoteFactsCache && remoteFactsCache.length > 0) {
+    const remoteLies = remoteFactsCache.filter((f) => f.isLie);
+    if (remoteLies.length >= 1) return remoteLies;
+  }
+
   const map = new Map<string, Fact>();
   INFINITE_POOL.convincingLies.forEach((f) => map.set(f.id, { ...f, isLie: true as const }));
   CURATED_ROUNDS.forEach((r) => {

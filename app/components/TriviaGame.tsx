@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { TriviaRound } from '../types/game';
-import { generateRoundForLevel, calculateRoundScore, getRankForLevel } from '../utils/infiniteEngine';
+import { generateRoundForLevel, calculateRoundScore, getRankForLevel, setRemoteFacts } from '../utils/infiniteEngine';
 import {
   playCorrectSound,
   playWrongSound,
@@ -11,6 +11,12 @@ import {
   playGameOverSound,
 } from '../utils/soundEffects';
 import { saveScoreToLeaderboard } from '../utils/leaderboard';
+import {
+  isSupabaseConfigured,
+  seedFactsToSupabaseIfEmpty,
+  fetchFactsFromSupabase,
+  recordRoundAnswerToSupabase,
+} from '../lib/supabase';
 import { Header } from './Header';
 import { FactCard } from './FactCard';
 import { LeaderboardModal } from './LeaderboardModal';
@@ -45,9 +51,19 @@ export const TriviaGame: React.FC = () => {
   const [isGameOver, setIsGameOver] = useState<boolean>(false);
   const [playerRankPosition, setPlayerRankPosition] = useState<number | null>(null);
 
-  // Registrar timestamp inicial
+  // Registrar timestamp inicial y sincronizar con Supabase
   useEffect(() => {
     roundStartTimeRef.current = getTimestamp();
+
+    if (isSupabaseConfigured) {
+      seedFactsToSupabaseIfEmpty().then(() => {
+        fetchFactsFromSupabase().then((facts) => {
+          if (facts && facts.length > 0) {
+            setRemoteFacts(facts);
+          }
+        });
+      });
+    }
   }, []);
 
   // Selección de una columna (identificar la mentira)
@@ -67,6 +83,9 @@ export const TriviaGame: React.FC = () => {
     const answeredCorrectly = chosenFact.isLie;
     setIsCorrect(answeredCorrectly);
 
+    let pointsAwarded = 0;
+    let multiplier = 1;
+
     if (answeredCorrectly) {
       // ¡Acierto! El usuario detectó la mentira
       playCorrectSound(soundEnabled);
@@ -82,6 +101,8 @@ export const TriviaGame: React.FC = () => {
       setTotalCorrect((prev) => prev + 1);
 
       const scoreCalculation = calculateRoundScore(level, newStreak, timeSpentSeconds);
+      pointsAwarded = scoreCalculation.points;
+      multiplier = scoreCalculation.multiplier;
       setScore((prev) => prev + scoreCalculation.points);
     } else {
       // Fallo: el usuario eligió un dato que era verdad
@@ -100,6 +121,18 @@ export const TriviaGame: React.FC = () => {
           setIsGameOver(true);
         }, 800);
       }
+    }
+
+    // Registrar la respuesta en la base de datos de Supabase si está activa
+    if (isSupabaseConfigured) {
+      recordRoundAnswerToSupabase({
+        level,
+        selectedFactText: chosenFact.text,
+        isCorrect: answeredCorrectly,
+        pointsAwarded,
+        streakMultiplier: multiplier,
+        responseTimeSeconds: Math.round(timeSpentSeconds * 10) / 10,
+      });
     }
   };
 
