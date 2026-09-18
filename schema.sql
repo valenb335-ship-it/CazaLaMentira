@@ -98,17 +98,16 @@ CREATE INDEX IF NOT EXISTS idx_round_answers_session ON round_answers(session_id
 -- ==========================================================
 CREATE OR REPLACE VIEW v_leaderboard AS
 SELECT 
-    ROW_NUMBER() OVER (ORDER BY s.final_score DESC, s.final_level DESC) AS rank_position,
-    COALESCE(p.username, 'Invitado') AS player_name,
-    s.final_score AS score,
-    s.final_level AS level_reached,
-    s.max_streak AS streak,
-    s.accuracy_percentage AS accuracy,
-    s.game_mode AS mode,
-    s.ended_at AS played_at
-FROM game_sessions s
-LEFT JOIN players p ON s.player_id = p.id
-ORDER BY s.final_score DESC, s.final_level DESC;
+    ROW_NUMBER() OVER (ORDER BY p.highest_score DESC, p.highest_level DESC) AS rank_position,
+    p.username AS player_name,
+    p.highest_score AS score,
+    p.highest_level AS level_reached,
+    p.max_streak AS streak,
+    p.total_games_played AS games_played,
+    p.updated_at AS played_at
+FROM players p
+WHERE p.highest_score > 0
+ORDER BY p.highest_score DESC, p.highest_level DESC;
 
 -- ==========================================================
 -- DATOS SEMILLA (CATEGORÍAS INICIALES)

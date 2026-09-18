@@ -5,16 +5,6 @@ import { isSupabaseConfigured, fetchLeaderboardFromSupabase, saveGameSessionToSu
 const STORAGE_KEY = 'trivia_caza_mentira_leaderboard';
 const PLAYER_NAME_KEY = 'trivia_caza_mentira_player_name';
 
-const INITIAL_RIVALS: LeaderboardEntry[] = [
-  { id: 'rival-1', playerName: 'Elena M.', score: 4850, level: 28, rankTitle: 'Oráculo de la Verdad', date: 'Ayer' },
-  { id: 'rival-2', playerName: 'Lucas Cazador', score: 3620, level: 21, rankTitle: 'Sabio Escéptico', date: 'Hace 2 días' },
-  { id: 'rival-3', playerName: 'Sofi Trivia', score: 2750, level: 16, rankTitle: 'Sabio Escéptico', date: 'Hace 3 días' },
-  { id: 'rival-4', playerName: 'Mateo R.', score: 1980, level: 12, rankTitle: 'Cazador de Fake News', date: 'Esta semana' },
-  { id: 'rival-5', playerName: 'Valen Explorer', score: 1450, level: 9, rankTitle: 'Detective de Mitos', date: 'Esta semana' },
-  { id: 'rival-6', playerName: 'Nico Data', score: 980, level: 6, rankTitle: 'Detective de Mitos', date: 'Esta semana' },
-  { id: 'rival-7', playerName: 'Camila Curiosa', score: 520, level: 4, rankTitle: 'Novato Curioso', date: 'Esta semana' },
-];
-
 export function getStoredPlayerName(): string {
   if (typeof window === 'undefined') return 'Tú';
   return localStorage.getItem(PLAYER_NAME_KEY) || 'Tú';
@@ -25,25 +15,32 @@ export function savePlayerName(name: string): void {
   localStorage.setItem(PLAYER_NAME_KEY, name.trim() || 'Tú');
 }
 
+// Obtener ranking local: SOLO usuarios reales que hayan jugado
 export function getLeaderboard(): LeaderboardEntry[] {
-  if (typeof window === 'undefined') return INITIAL_RIVALS;
+  if (typeof window === 'undefined') return [];
   const stored = localStorage.getItem(STORAGE_KEY);
-  if (!stored) {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(INITIAL_RIVALS));
-    return INITIAL_RIVALS;
-  }
+  if (!stored) return [];
   try {
-    return JSON.parse(stored);
+    const parsed: LeaderboardEntry[] = JSON.parse(stored);
+    // Filtrar y purgar cualquier usuario ficticio o rival de prueba
+    const realOnly = parsed.filter(
+      (e) => !e.id.startsWith('rival-') && !e.playerName.toLowerCase().includes('rival')
+    );
+    // Si había datos ficticios antiguos guardados, actualizar el storage
+    if (realOnly.length !== parsed.length) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(realOnly));
+    }
+    return realOnly;
   } catch {
-    return INITIAL_RIVALS;
+    return [];
   }
 }
 
-// Carga el ranking priorizando Supabase si está disponible
+// Carga el ranking priorizando usuarios reales de Supabase
 export async function getLeaderboardWithRemote(): Promise<LeaderboardEntry[]> {
   if (isSupabaseConfigured) {
     const remote = await fetchLeaderboardFromSupabase();
-    if (remote && remote.length > 0) {
+    if (remote !== null) {
       return remote;
     }
   }
@@ -58,7 +55,7 @@ export function saveScoreToLeaderboard(
 ): { entries: LeaderboardEntry[]; playerRank: number } {
   const playerName = getStoredPlayerName();
 
-  // 1. Guardar en Supabase en segundo plano si está configurado
+  // 1. Guardar en Supabase si está configurado
   if (isSupabaseConfigured) {
     saveGameSessionToSupabase({
       playerName,
@@ -72,24 +69,34 @@ export function saveScoreToLeaderboard(
 
   // 2. Guardar en almacenamiento local para respuesta instantánea
   if (typeof window === 'undefined') {
-    return { entries: INITIAL_RIVALS, playerRank: 1 };
+    return { entries: [], playerRank: 1 };
   }
 
-  const currentEntries = getLeaderboard().filter((e) => !e.isCurrentPlayer);
-  const rankInfo = getRankForLevel(level);
+  // Filtrar partidas previas del jugador para actualizar con su mejor puntuación
+  const existingEntries = getLeaderboard();
+  const otherPlayers = existingEntries.filter(
+    (e) => e.playerName !== `${playerName} (Tú)` && e.playerName !== playerName
+  );
+  const previousPlayerEntry = existingEntries.find(
+    (e) => e.playerName === `${playerName} (Tú)` || e.playerName === playerName
+  );
+
+  const bestScore = Math.max(previousPlayerEntry?.score || 0, score);
+  const bestLevel = Math.max(previousPlayerEntry?.level || 1, level);
+  const rankInfo = getRankForLevel(bestLevel);
 
   const playerEntry: LeaderboardEntry = {
     id: `player-${Date.now()}`,
     playerName: `${playerName} (Tú)`,
-    score,
-    level,
+    score: bestScore,
+    level: bestLevel,
     rankTitle: rankInfo.title,
     date: '¡Hoy!',
     isCurrentPlayer: true,
   };
 
-  const combined = [...currentEntries, playerEntry].sort((a, b) => b.score - a.score);
-  const topEntries = combined.slice(0, 15);
+  const combined = [...otherPlayers, playerEntry].sort((a, b) => b.score - a.score);
+  const topEntries = combined.slice(0, 20);
   localStorage.setItem(STORAGE_KEY, JSON.stringify(topEntries));
 
   const playerRank = topEntries.findIndex((e) => e.isCurrentPlayer) + 1;

@@ -25,30 +25,32 @@ export async function fetchLeaderboardFromSupabase(): Promise<LeaderboardEntry[]
   if (!supabase) return null;
 
   try {
-    // Intentar consultar la vista v_leaderboard
-    const { data: viewData, error: viewError } = await supabase
-      .from('v_leaderboard')
-      .select('*')
-      .order('score', { ascending: false })
-      .limit(15);
+    // 1. Consultar jugadores reales de la tabla players con su mejor puntuación
+    const { data: playersData, error: playersError } = await supabase
+      .from('players')
+      .select('id, username, highest_score, highest_level, max_streak, updated_at')
+      .gt('highest_score', 0)
+      .order('highest_score', { ascending: false })
+      .limit(20);
 
-    if (!viewError && viewData && viewData.length > 0) {
-      return viewData.map((row) => ({
-        id: `sb-${row.rank_position}-${row.player_name}`,
-        playerName: row.player_name || 'Anónimo',
-        score: row.score || 0,
-        level: row.level_reached || 1,
-        rankTitle: `Nivel ${row.level_reached || 1}`,
-        date: row.played_at ? new Date(row.played_at).toLocaleDateString() : 'Reciente',
+    if (!playersError && playersData && playersData.length > 0) {
+      return playersData.map((row) => ({
+        id: row.id,
+        playerName: row.username || 'Cazador',
+        score: row.highest_score || 0,
+        level: row.highest_level || 1,
+        rankTitle: `Nivel ${row.highest_level || 1}`,
+        date: row.updated_at ? new Date(row.updated_at).toLocaleDateString() : 'Reciente',
       }));
     }
 
-    // Si la vista no está creada, consultar directamente game_sessions
+    // 2. Si players no tiene registros, consultar partidas reales en game_sessions con puntuación > 0
     const { data: sessionData, error: sessionError } = await supabase
       .from('game_sessions')
       .select('id, final_score, final_level, max_streak, ended_at, players(username)')
+      .gt('final_score', 0)
       .order('final_score', { ascending: false })
-      .limit(15);
+      .limit(20);
 
     if (!sessionError && sessionData && sessionData.length > 0) {
       return sessionData.map((row, index) => {
@@ -64,7 +66,8 @@ export async function fetchLeaderboardFromSupabase(): Promise<LeaderboardEntry[]
       });
     }
 
-    return null;
+    // Si aún no hay partidas reales registradas en la base de datos
+    return [];
   } catch (err) {
     console.error('Error al obtener ranking de Supabase:', err);
     return null;

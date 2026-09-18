@@ -119,55 +119,69 @@ export const LeaderboardModal: React.FC<LeaderboardModalProps> = ({ isOpen, onCl
           )}
         </div>
 
-        {/* Tabla de Clasificación */}
+        {/* Tabla de Clasificación o Estado Vacío */}
         <div className="overflow-y-auto p-4 space-y-2 flex-1">
-          {entries.map((entry, index) => {
-            const isTop3 = index < 3;
-            const rankMedals = ['🥇', '🥈', '🥉'];
+          {entries.length === 0 ? (
+            <div className="py-12 px-4 text-center flex flex-col items-center justify-center text-zinc-500">
+              <div className="w-12 h-12 rounded-2xl bg-zinc-800/60 border border-zinc-700/50 flex items-center justify-center mb-3 text-amber-400/80">
+                <TrophyIcon className="w-6 h-6" />
+              </div>
+              <p className="text-sm font-bold text-zinc-200">
+                Aún no hay puntuaciones registradas
+              </p>
+              <p className="text-xs text-zinc-500 mt-1 max-w-xs">
+                ¡Sé el primer jugador real en completar una partida para estrenar el ranking!
+              </p>
+            </div>
+          ) : (
+            entries.map((entry, index) => {
+              const isTop3 = index < 3;
+              const rankMedals = ['🥇', '🥈', '🥉'];
 
-            return (
-              <div
-                key={entry.id || index}
-                className={`flex items-center justify-between p-3 rounded-xl border transition-all ${
-                  entry.isCurrentPlayer
-                    ? 'bg-emerald-950/30 border-emerald-500/50 shadow-sm'
-                    : 'bg-zinc-950/40 border-zinc-800/60'
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-7 text-center font-bold text-xs">
-                    {isTop3 ? (
-                      <span className="text-base">{rankMedals[index]}</span>
-                    ) : (
-                      <span className="text-zinc-500">#{index + 1}</span>
-                    )}
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-1.5">
-                      <span className={`text-sm font-bold ${entry.isCurrentPlayer ? 'text-emerald-300' : 'text-zinc-200'}`}>
-                        {entry.playerName}
-                      </span>
-                      {entry.isCurrentPlayer && (
-                        <span className="text-[10px] bg-emerald-500/20 text-emerald-300 px-1.5 py-0.2 rounded font-bold">
-                          TÚ
-                        </span>
+              return (
+                <div
+                  key={entry.id || index}
+                  className={`flex items-center justify-between p-3 rounded-xl border transition-all ${
+                    entry.isCurrentPlayer
+                      ? 'bg-emerald-950/30 border-emerald-500/50 shadow-sm'
+                      : 'bg-zinc-950/40 border-zinc-800/60'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-7 text-center font-bold text-xs">
+                      {isTop3 ? (
+                        <span className="text-base">{rankMedals[index]}</span>
+                      ) : (
+                        <span className="text-zinc-500">#{index + 1}</span>
                       )}
                     </div>
-                    <div className="text-[11px] text-zinc-400">
-                      Nivel {entry.level} • {entry.rankTitle}
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <span className={`text-sm font-bold ${entry.isCurrentPlayer ? 'text-emerald-300' : 'text-zinc-200'}`}>
+                          {entry.playerName}
+                        </span>
+                        {entry.isCurrentPlayer && (
+                          <span className="text-[10px] bg-emerald-500/20 text-emerald-300 px-1.5 py-0.2 rounded font-bold">
+                            TÚ
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-[11px] text-zinc-400">
+                        Nivel {entry.level} • {entry.rankTitle}
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                <div className="text-right">
-                  <div className="text-sm font-black text-zinc-100">
-                    {entry.score.toLocaleString()} <span className="text-[10px] text-zinc-400 font-semibold">PTS</span>
+                  <div className="text-right">
+                    <div className="text-sm font-black text-zinc-100">
+                      {entry.score.toLocaleString()} <span className="text-[10px] text-zinc-400 font-semibold">PTS</span>
+                    </div>
+                    <div className="text-[10px] text-zinc-500">{entry.date}</div>
                   </div>
-                  <div className="text-[10px] text-zinc-500">{entry.date}</div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })
+          )}
         </div>
 
         {/* Pie del modal */}
