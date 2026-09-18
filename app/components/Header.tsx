@@ -7,8 +7,13 @@ interface HeaderProps {
   streak: number;
   lives: number;
   soundEnabled: boolean;
+  isStudyMode: boolean;
+  studyTitle?: string;
+  totalStudyRounds?: number;
   onToggleSound: () => void;
   onOpenLeaderboard: () => void;
+  onOpenStudyModal: () => void;
+  onExitStudyMode: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -17,13 +22,18 @@ export const Header: React.FC<HeaderProps> = ({
   streak,
   lives,
   soundEnabled,
+  isStudyMode,
+  studyTitle,
+  totalStudyRounds,
   onToggleSound,
   onOpenLeaderboard,
+  onOpenStudyModal,
+  onExitStudyMode,
 }) => {
   return (
     <header className="w-full max-w-7xl mx-auto px-4 sm:px-8 py-3 flex items-center justify-between border-b border-zinc-900 bg-zinc-950/80 backdrop-blur-md z-20">
-      {/* Izquierda: Vidas y Nivel */}
-      <div className="flex items-center gap-4">
+      {/* Izquierda: Vidas y Nivel / Progreso de Estudio */}
+      <div className="flex items-center gap-3 sm:gap-4">
         {/* Vidas */}
         <div className="flex items-center gap-1">
           <HeartIcon filled={lives >= 1} className="w-5 h-5" />
@@ -31,10 +41,20 @@ export const Header: React.FC<HeaderProps> = ({
           <HeartIcon filled={lives >= 3} className="w-5 h-5" />
         </div>
 
-        {/* Nivel */}
+        {/* Nivel / Pregunta */}
         <span className="text-xs font-bold text-zinc-400 bg-zinc-900 border border-zinc-800 px-2 py-0.5 rounded-md">
-          Nv. {level}
+          {isStudyMode && totalStudyRounds
+            ? `Pregunta ${level}/${totalStudyRounds}`
+            : `Nv. ${level}`}
         </span>
+
+        {/* Badge de Modo Estudio si está activo */}
+        {isStudyMode && studyTitle && (
+          <div className="hidden md:flex items-center gap-1.5 text-xs text-emerald-400 bg-emerald-950/50 border border-emerald-800/40 px-2.5 py-0.5 rounded-md">
+            <span>📚</span>
+            <span className="font-semibold truncate max-w-[150px]">{studyTitle}</span>
+          </div>
+        )}
       </div>
 
       {/* Centro: Puntuación y Racha */}
@@ -50,8 +70,38 @@ export const Header: React.FC<HeaderProps> = ({
         )}
       </div>
 
-      {/* Derecha: Botón Ranking y Sonido */}
+      {/* Derecha: Botón Modo Estudio, Ranking y Sonido */}
       <div className="flex items-center gap-2">
+        {/* Botón Modo Estudio / Cambiar Apuntes */}
+        {isStudyMode ? (
+          <div className="flex items-center gap-1">
+            <button
+              onClick={onOpenStudyModal}
+              className="px-2.5 py-1.5 bg-emerald-950/40 hover:bg-emerald-900/50 border border-emerald-700/50 text-emerald-300 rounded-lg text-xs font-bold transition-all"
+              title="Cargar otros apuntes"
+            >
+              Cambiar Apuntes
+            </button>
+            <button
+              onClick={onExitStudyMode}
+              className="px-2 py-1.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-400 hover:text-zinc-200 rounded-lg text-xs font-semibold transition-all"
+              title="Volver a la trivia general"
+            >
+              Volver a Trivia
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={onOpenStudyModal}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 hover:border-emerald-600/50 text-zinc-200 hover:text-emerald-300 rounded-lg text-xs font-bold transition-all shadow-sm group"
+            title="Subir archivos o apuntes para estudiar"
+          >
+            <span>📚</span>
+            <span className="hidden sm:inline">Modo Estudio</span>
+          </button>
+        )}
+
+        {/* Botón Ranking */}
         <button
           onClick={onOpenLeaderboard}
           className="p-2 bg-zinc-900/80 hover:bg-zinc-800 border border-zinc-800/80 hover:border-zinc-700 text-amber-400 rounded-lg transition-colors"
@@ -61,6 +111,7 @@ export const Header: React.FC<HeaderProps> = ({
           <TrophyIcon className="w-4 h-4" />
         </button>
 
+        {/* Botón Sonido */}
         <button
           onClick={onToggleSound}
           className="p-2 bg-zinc-900/80 hover:bg-zinc-800 border border-zinc-800/80 hover:border-zinc-700 text-zinc-400 hover:text-zinc-200 rounded-lg transition-colors"

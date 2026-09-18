@@ -1,4 +1,4 @@
-export type Category = 'historia' | 'geografia' | 'musica' | 'cine';
+export type Category = 'historia' | 'geografia' | 'musica' | 'cine' | 'estudio';
 
 export interface Fact {
   id: string;
@@ -17,7 +17,15 @@ export interface TriviaRound {
   themeTitle: string;
 }
 
-export type GameMode = 'challenge' | 'zen';
+export type GameMode = 'challenge' | 'zen' | 'study';
+
+export interface StudyMaterial {
+  id: string;
+  title: string;
+  rawText: string;
+  rounds: TriviaRound[];
+  createdAt: string;
+}
 
 export interface GameState {
   currentLevel: number;

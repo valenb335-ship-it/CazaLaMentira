@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { TriviaRound } from '../types/game';
+import { TriviaRound, StudyMaterial } from '../types/game';
 import { generateRoundForLevel, calculateRoundScore, getRankForLevel, setRemoteFacts } from '../utils/infiniteEngine';
 import {
   playCorrectSound,
@@ -21,6 +21,7 @@ import { Header } from './Header';
 import { FactCard } from './FactCard';
 import { LeaderboardModal } from './LeaderboardModal';
 import { GameOverModal } from './GameOverModal';
+import { StudyUploadModal } from './StudyUploadModal';
 
 function getTimestamp(): number {
   return Date.now();
@@ -34,6 +35,12 @@ export const TriviaGame: React.FC = () => {
   const [maxStreak, setMaxStreak] = useState<number>(0);
   const [lives, setLives] = useState<number>(3);
   const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
+
+  // Estado del Modo Estudio
+  const [isStudyMode, setIsStudyMode] = useState<boolean>(false);
+  const [studyMaterial, setStudyMaterial] = useState<StudyMaterial | null>(null);
+  const [studyRoundIndex, setStudyRoundIndex] = useState<number>(0);
+  const [isStudyModalOpen, setIsStudyModalOpen] = useState<boolean>(false);
 
   // Estado de la ronda actual (sin repetir datos gracias al motor en infiniteEngine)
   const [currentRound, setCurrentRound] = useState<TriviaRound>(() => generateRoundForLevel(1, 'mix'));
@@ -65,6 +72,35 @@ export const TriviaGame: React.FC = () => {
       });
     }
   }, []);
+
+  // Iniciar Modo Estudio con apuntes cargados
+  const handleStartStudy = (material: StudyMaterial) => {
+    playClickSound(soundEnabled);
+    setIsStudyMode(true);
+    setStudyMaterial(material);
+    setStudyRoundIndex(0);
+    setLevel(1);
+    setCurrentRound(material.rounds[0]);
+    setSelectedFactId(null);
+    setHasAnswered(false);
+    setIsCorrect(null);
+    roundStartTimeRef.current = getTimestamp();
+  };
+
+  // Salir de Modo Estudio y volver a Trivia General
+  const handleExitStudyMode = () => {
+    playClickSound(soundEnabled);
+    setIsStudyMode(false);
+    setStudyMaterial(null);
+    setStudyRoundIndex(0);
+    setLevel(1);
+    const regularRound = generateRoundForLevel(1, 'mix');
+    setCurrentRound(regularRound);
+    setSelectedFactId(null);
+    setHasAnswered(false);
+    setIsCorrect(null);
+    roundStartTimeRef.current = getTimestamp();
+  };
 
   // Selección de una columna (identificar la mentira)
   const handleSelectFact = (factId: string) => {
@@ -136,7 +172,7 @@ export const TriviaGame: React.FC = () => {
     }
   };
 
-  // Pasar a la siguiente ronda (generando datos nuevos nunca repetidos)
+  // Pasar a la siguiente ronda
   const handleNextRound = () => {
     playClickSound(soundEnabled);
 
@@ -144,14 +180,30 @@ export const TriviaGame: React.FC = () => {
       return;
     }
 
-    const nextLevel = isCorrect ? level + 1 : level;
-    setLevel(nextLevel);
+    // Si estamos en Modo Estudio, avanzamos a la siguiente ronda del material
+    if (isStudyMode && studyMaterial) {
+      const nextIdx = studyRoundIndex + 1;
+      if (nextIdx < studyMaterial.rounds.length) {
+        setStudyRoundIndex(nextIdx);
+        setLevel(nextIdx + 1);
+        setCurrentRound(studyMaterial.rounds[nextIdx]);
+      } else {
+        // Se completó el temario: volver a barajar para repasar de nuevo
+        setStudyRoundIndex(0);
+        setLevel(1);
+        setCurrentRound(studyMaterial.rounds[0]);
+      }
+    } else {
+      // Trivia General: datos nuevos nunca repetidos
+      const nextLevel = isCorrect ? level + 1 : level;
+      setLevel(nextLevel);
+      const nextRound = generateRoundForLevel(nextLevel, 'mix');
+      setCurrentRound(nextRound);
+    }
+
     setSelectedFactId(null);
     setHasAnswered(false);
     setIsCorrect(null);
-
-    const nextRound = generateRoundForLevel(nextLevel, 'mix');
-    setCurrentRound(nextRound);
     roundStartTimeRef.current = getTimestamp();
   };
 
@@ -170,8 +222,14 @@ export const TriviaGame: React.FC = () => {
     setTotalAnswered(0);
     setTotalCorrect(0);
 
-    const newRound = generateRoundForLevel(1, 'mix');
-    setCurrentRound(newRound);
+    if (isStudyMode && studyMaterial) {
+      setStudyRoundIndex(0);
+      setCurrentRound(studyMaterial.rounds[0]);
+    } else {
+      const newRound = generateRoundForLevel(1, 'mix');
+      setCurrentRound(newRound);
+    }
+
     roundStartTimeRef.current = getTimestamp();
   };
 
@@ -179,15 +237,20 @@ export const TriviaGame: React.FC = () => {
 
   return (
     <div className="h-screen w-screen overflow-hidden bg-zinc-950 text-zinc-100 flex flex-col select-none">
-      {/* Barra superior minimalista: Vidas, Nivel, Puntuación, Ranking y Sonido */}
+      {/* Barra superior minimalista */}
       <Header
         level={level}
         score={score}
         streak={streak}
         lives={lives}
         soundEnabled={soundEnabled}
+        isStudyMode={isStudyMode}
+        studyTitle={studyMaterial?.title}
+        totalStudyRounds={studyMaterial?.rounds.length}
         onToggleSound={() => setSoundEnabled((prev) => !prev)}
         onOpenLeaderboard={() => setShowLeaderboard(true)}
+        onOpenStudyModal={() => setIsStudyModalOpen(true)}
+        onExitStudyMode={handleExitStudyMode}
       />
 
       {/* Contenedor de las 3 columnas a pantalla completa */}
@@ -220,6 +283,13 @@ export const TriviaGame: React.FC = () => {
           </div>
         )}
       </main>
+
+      {/* Modal de Modo Estudio */}
+      <StudyUploadModal
+        isOpen={isStudyModalOpen}
+        onClose={() => setIsStudyModalOpen(false)}
+        onStartStudy={handleStartStudy}
+      />
 
       {/* Modales */}
       <LeaderboardModal
